@@ -1,171 +1,272 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import re
 import string
 import sys
 import os
+import csv
 import urllib
 import urllib2
 from bs4 import BeautifulSoup
 import requests
 from lxml import etree
 import traceback
+import unicodecsv
+import time
+from random import randint
+
+# å°†your cookieæ›¿æ¢æˆè‡ªå·±çš„cookie
+Cookie = "your cookie"
 
 class weibo:
-	cookie = {"Cookie": "your cookie"} #½«your cookieÌæ»»³É×Ô¼ºµÄcookie
-	#weiboÀà³õÊ¼»¯
-	def __init__(self,user_id,filter = 0):
-			self.user_id = user_id #ÓÃ»§id£¬¼´ĞèÒªÎÒÃÇÊäÈëµÄÊı×Ö£¬ÈçêÇ³ÆÎª¡°Dear-µÏÀöÈÈ°Í¡±µÄidÎª1669879400
-			self.filter = filter #È¡Öµ·¶Î§Îª0¡¢1£¬³ÌĞòÄ¬ÈÏÖµÎª0£¬´ú±íÒªÅÀÈ¡ÓÃ»§µÄÈ«²¿Î¢²©£¬1´ú±íÖ»ÅÀÈ¡ÓÃ»§µÄÔ­´´Î¢²©
-			self.userName = '' #ÓÃ»§Ãû£¬Èç¡°Dear-µÏÀöÈÈ°Í¡±
-			self.weiboNum = 0 #ÓÃ»§È«²¿Î¢²©Êı
-			self.weiboNum2 = 0 #ÅÀÈ¡µ½µÄÎ¢²©Êı
-			self.following = 0 #ÓÃ»§¹Ø×¢Êı
-			self.followers = 0 #ÓÃ»§·ÛË¿Êı
-			self.weibos = [] #Î¢²©ÄÚÈİ
-			self.num_zan = [] #Î¢²©¶ÔÓ¦µÄµãÔŞÊı
-			self.num_forwarding = [] #Î¢²©¶ÔÓ¦µÄ×ª·¢Êı
-			self.num_comment = [] #Î¢²©¶ÔÓ¦µÄÆÀÂÛÊı
-			
-	#»ñÈ¡ÓÃ»§êÇ³Æ		
-	def getUserName(self):
-	  try:
-		url = 'http://weibo.cn/%d/info'%(self.user_id)
-		html = requests.get(url, cookies = weibo.cookie).content
-		selector = etree.HTML(html)
-		userName = selector.xpath("//title/text()")[0]
-		self.userName = userName[:-3].encode('gbk')
-		#print 'ÓÃ»§êÇ³Æ£º' + self.userName
-	  except Exception,e:		 
-		print "Error: ",e 
-		traceback.print_exc()
-		
-	#»ñÈ¡ÓÃ»§Î¢²©Êı¡¢¹Ø×¢Êı¡¢·ÛË¿Êı
-	def getUserInfo(self):
-	  try:
-		url = 'http://weibo.cn/u/%d?filter=%d&page=1'%(self.user_id,self.filter)
-		html = requests.get(url, cookies = weibo.cookie).content
-		selector = etree.HTML(html)	
-		pattern = r"\d+\.?\d*"
+    cookie = {"Cookie": Cookie}  
 
-		#Î¢²©Êı
-		str_wb = selector.xpath("//div[@class='tip2']/span[@class='tc']/text()")[0]
-		guid = re.findall(pattern, str_wb, re.S|re.M)	
-		for value in guid:	 
-			num_wb = int(value)	 
-			break
-		self.weiboNum = num_wb	
-		#print 'Î¢²©Êı: ' + str(self.weiboNum)	
-  
-		#¹Ø×¢Êı
-		str_gz = selector.xpath("//div[@class='tip2']/a/text()")[0]
-		guid = re.findall(pattern, str_gz, re.M)  
-		self.following = int(guid[0])  
-		#print '¹Ø×¢Êı: ' + str(self.following)
+    # weiboç±»åˆå§‹åŒ–
+    def __init__(self, user_id, filter=0, p_l=0, p_u=0):
+        self.user_id = user_id  # ç”¨æˆ·idï¼Œå³éœ€è¦æˆ‘ä»¬è¾“å…¥çš„æ•°å­—ï¼Œå¦‚æ˜µç§°ä¸ºâ€œDear-è¿ªä¸½çƒ­å·´â€çš„idä¸º1669879400
+        self.filter = filter  # å–å€¼èŒƒå›´ä¸º0ã€1ï¼Œç¨‹åºé»˜è®¤å€¼ä¸º0ï¼Œä»£è¡¨è¦çˆ¬å–ç”¨æˆ·çš„å…¨éƒ¨å¾®åšï¼Œ1ä»£è¡¨åªçˆ¬å–ç”¨æˆ·çš„åŸåˆ›å¾®åš
+        self.userName = ''  # ç”¨æˆ·åï¼Œå¦‚â€œDear-è¿ªä¸½çƒ­å·´â€
+        self.weiboNum = 0  # ç”¨æˆ·å…¨éƒ¨å¾®åšæ•°
+        self.weiboNum2 = 0  # çˆ¬å–åˆ°çš„å¾®åšæ•°
+        self.following = 0  # ç”¨æˆ·å…³æ³¨æ•°
+        self.followers = 0  # ç”¨æˆ·ç²‰ä¸æ•°
+        self.weibos = []  # å¾®åšå†…å®¹
+        self.num_zan = []  # å¾®åšå¯¹åº”çš„ç‚¹èµæ•°
+        self.num_forwarding = []  # å¾®åšå¯¹åº”çš„è½¬å‘æ•°
+        self.num_comment = []  # å¾®åšå¯¹åº”çš„è¯„è®ºæ•°
+        self.top_comments = []  # å¾®åšçƒ­é—¨è¯„è®º
+        self.top_comments_user = []  # å¾®åšçƒ­é—¨è¯„è®º
+        self.top_comments_vip = []  # å¾®åšçƒ­é—¨è¯„è®ºå‘è¨€ç”¨æˆ·æ˜¯å¦ä¸ºå¤§V, æš‚æ—¶å®ç°ä¸äº†
+        self.top_comments_zan = []  # å¾®åšçƒ­é—¨è¯„è®ºç‚¹èµæ•°
+        self.page_lower = p_l  # ä»ç¬¬å‡ é¡µå¼€å§‹çˆ¬
+        self.page_upper = p_u  # çˆ¬åˆ°ç¬¬å‡ é¡µç»“æŸ
 
-		#·ÛË¿Êı
-		str_fs = selector.xpath("//div[@class='tip2']/a/text()")[1]
-		guid = re.findall(pattern, str_fs, re.M)  
-		self.followers = int(guid[0]) 
-		#print '·ÛË¿Êı: ' + str(self.followers)
-	  except Exception,e:		 
-		print "Error: ",e
-		traceback.print_exc()
-		
-	#»ñÈ¡ÓÃ»§Î¢²©ÄÚÈİ¼°¶ÔÓ¦µÄµãÔŞÊı¡¢×ª·¢Êı¡¢ÆÀÂÛÊı	
-	def getWeiboInfo(self):
-	  try:
-		url = 'http://weibo.cn/u/%d?filter=%d&page=1'%(self.user_id,self.filter)
-		html = requests.get(url, cookies = weibo.cookie).content
-		selector = etree.HTML(html)
-		if selector.xpath('//input[@name="mp"]')==[]:
-		   pageNum = 1
-		else:
-		   pageNum = (int)(selector.xpath('//input[@name="mp"]')[0].attrib['value'])
-		pattern = r"\d+\.?\d*"
-		for page in range(1,pageNum+1):
-		  url2 = 'http://weibo.cn/u/%d?filter=%d&page=%d'%(self.user_id,self.filter,page)
-		  html2 = requests.get(url2, cookies = weibo.cookie).content
-		  selector2 = etree.HTML(html2)
-		  info = selector2.xpath("//div[@class='c']")
-		  #print len(info)
-		  if len(info) > 3:
-			for i in range(0,len(info)-2):
-			  self.weiboNum2 = self.weiboNum2 + 1
-			  #Î¢²©ÄÚÈİ
-			  str_t = info[i].xpath("div/span[@class='ctt']")
-			  weibos = str_t[0].xpath('string(.)').encode('gbk','ignore')
-			  self.weibos.append(weibos)
-			  #print 'Î¢²©ÄÚÈİ£º'+ weibos
-			  #µãÔŞÊı
-			  str_zan = info[i].xpath("div/a/text()")[-4]
-			  guid = re.findall(pattern, str_zan, re.M)	 
-			  num_zan = int(guid[0])
-			  self.num_zan.append(num_zan)
-			  #print 'µãÔŞÊı: ' + str(num_zan)
-			  #×ª·¢Êı
-			  forwarding = info[i].xpath("div/a/text()")[-3]
-			  guid = re.findall(pattern, forwarding, re.M)	
-			  num_forwarding = int(guid[0])
-			  self.num_forwarding.append(num_forwarding)			  
-			  #print '×ª·¢Êı: ' + str(num_forwarding)
-			  #ÆÀÂÛÊı
-			  comment = info[i].xpath("div/a/text()")[-2]
-			  guid = re.findall(pattern, comment, re.M)	 
-			  num_comment = int(guid[0]) 
-			  self.num_comment.append(num_comment)
-			  #print 'ÆÀÂÛÊı: ' + str(num_comment)
-		if self.filter == 0:
-		  print '¹²'+str(self.weiboNum2)+'ÌõÎ¢²©'
-		else:
-		  print '¹²'+str(self.weiboNum)+'ÌõÎ¢²©£¬ÆäÖĞ'+str(self.weiboNum2)+'ÌõÎªÔ­´´Î¢²©'
-	  except Exception,e:		 
-		print "Error: ",e
-		traceback.print_exc()
-	
-	#Ö÷³ÌĞò
-	def start(self):
-	  try:
-		weibo.getUserName(self)
-		weibo.getUserInfo(self)
-		weibo.getWeiboInfo(self)
-		print 'ĞÅÏ¢×¥È¡Íê±Ï'
-		print '==========================================================================='
-	  except Exception,e:		 
-		print "Error: ",e
-    
-    #½«ÅÀÈ¡µÄĞÅÏ¢Ğ´ÈëÎÄ¼ş	
-	def writeTxt(self):
-	  try:
-		if self.filter == 1:
-		   resultHeader = '\n\nÔ­´´Î¢²©ÄÚÈİ£º\n'
-		else:
-		   resultHeader = '\n\nÎ¢²©ÄÚÈİ£º\n'
-		result = 'ÓÃ»§ĞÅÏ¢\nÓÃ»§êÇ³Æ£º' + self.userName + '\nÓÃ»§id£º' + str(self.user_id) + '\nÎ¢²©Êı£º' + str(self.weiboNum) + '\n¹Ø×¢Êı£º' + str(self.following) + '\n·ÛË¿Êı£º' + str(self.followers) + resultHeader
-		for i in range(1,self.weiboNum2 + 1):
-		  text=str(i) + ':' + self.weibos[i-1] + '\n'+'µãÔŞÊı£º' + str(self.num_zan[i-1]) + '	 ×ª·¢Êı£º' + str(self.num_forwarding[i-1]) + '	 ÆÀÂÛÊı£º' + str(self.num_comment[i-1]) + '\n\n'
-		  result = result + text
-		if os.path.isdir('weibo') == False:
-		   os.mkdir('weibo')
-		f = open("weibo/%s.txt"%self.user_id, "wb")
-		f.write(result)
-		f.close()
-		file_path=os.getcwd()+"\weibo"+"\%d"%self.user_id+".txt"
-		print 'Î¢²©Ğ´ÈëÎÄ¼şÍê±Ï£¬±£´æÂ·¾¶%s'%(file_path)
-	  except Exception,e:		 
-		print "Error: ",e 
-		traceback.print_exc()		
-		
-		
-#Ê¹ÓÃÊµÀı,ÊäÈëÒ»¸öÓÃ»§id£¬ËùÓĞĞÅÏ¢¶¼»á´æ´¢ÔÚwbÊµÀıÖĞ		
-user_id = 1669879400 #¿ÉÒÔ¸Ä³ÉÈÎÒâºÏ·¨µÄÓÃ»§id£¨ÅÀ³æµÄÎ¢²©id³ıÍâ£©
-filter = 1 #ÖµÎª0±íÊ¾ÅÀÈ¡È«²¿µÄÎ¢²©ĞÅÏ¢£¨Ô­´´Î¢²©+×ª·¢Î¢²©£©£¬ÖµÎª1±íÊ¾Ö»ÅÀÈ¡Ô­´´Î¢²©
-wb = weibo(user_id,filter) #µ÷ÓÃweiboÀà£¬´´½¨Î¢²©ÊµÀıwb
-wb.start() #ÅÀÈ¡Î¢²©ĞÅÏ¢
-print 'ÓÃ»§Ãû£º' + wb.userName
-print 'È«²¿Î¢²©Êı£º' + str(wb.weiboNum)
-print '¹Ø×¢Êı£º' + str(wb.following)
-print '·ÛË¿Êı£º' + str(wb.followers)
-print '×îĞÂÒ»ÌõÎ¢²©Îª£º' + wb.weibos[0] #Èôfilter=1ÔòÎª×îĞÂµÄÔ­´´Î¢²©£¬Èç¹û¸ÃÓÃ»§Î¢²©ÊıÎª0£¬¼´len(wb.weibos)==0,´òÓ¡»á³ö´í£¬ÏÂÍ¬
-print '×îĞÂÒ»ÌõÎ¢²©»ñµÃµÄµãÔŞÊı£º' + str(wb.num_zan[0])
-print '×îĞÂÒ»ÌõÎ¢²©»ñµÃµÄ×ª·¢Êı£º' + str(wb.num_forwarding[0])
-print '×îĞÂÒ»ÌõÎ¢²©»ñµÃµÄÆÀÂÛÊı£º' + str(wb.num_comment[0])
-wb.writeTxt() #wb.writeTxt()Ö»ÊÇ°ÑĞÅÏ¢Ğ´µ½ÎÄ¼şÀï£¬´ó¼Ò¿ÉÒÔ¸ù¾İ×Ô¼ºµÄĞèÒªÖØĞÂ±àĞ´writeTxt()º¯Êı
+    # è·å–ç”¨æˆ·æ˜µç§°
+    def getUserName(self):
+        try:
+            url = 'http://weibo.cn/%d/info' % (self.user_id)
+            html = requests.get(url, cookies=weibo.cookie).content
+
+            # # Store Local copy of html
+            # f = open("local.html", "w")
+            # f.write(html)
+            # f.close()
+
+            selector = etree.HTML(html)
+            userName = selector.xpath("//title/text()")[0]
+            self.userName = userName[:-3].encode('utf-8')
+        # print 'ç”¨æˆ·æ˜µç§°ï¼š' + self.userName
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+    # è·å–ç”¨æˆ·å¾®åšæ•°ã€å…³æ³¨æ•°ã€ç²‰ä¸æ•°
+    def getUserInfo(self):
+        try:
+            url = 'http://weibo.cn/u/%d?filter=%d&page=1' % (self.user_id, self.filter)
+            html = requests.get(url, cookies=weibo.cookie).content
+            selector = etree.HTML(html)
+            pattern = r"\d+\.?\d*"
+
+            # å¾®åšæ•°
+            str_wb = selector.xpath("//div[@class='tip2']/span[@class='tc']/text()")[0]
+            guid = re.findall(pattern, str_wb, re.S | re.M)
+            for value in guid:
+                num_wb = int(value)
+                break
+            self.weiboNum = num_wb
+            # print 'å¾®åšæ•°: ' + str(self.weiboNum)
+
+            # å…³æ³¨æ•°
+            str_gz = selector.xpath("//div[@class='tip2']/a/text()")[0]
+            guid = re.findall(pattern, str_gz, re.M)
+            self.following = int(guid[0])
+            # print 'å…³æ³¨æ•°: ' + str(self.following)
+
+            # ç²‰ä¸æ•°
+            str_fs = selector.xpath("//div[@class='tip2']/a/text()")[1]
+            guid = re.findall(pattern, str_fs, re.M)
+            self.followers = int(guid[0])
+        # print 'ç²‰ä¸æ•°: ' + str(self.followers)
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+    # è·å–å¾®åšçš„æœ€çƒ­é—¨è¯„è®º
+    def getTopWeiboComment(self, weibo_id):
+        pattern = r"\d+\.?\d*"
+        try:
+            url = 'http://weibo.cn/comment/hot/%s' % (weibo_id)
+            html = requests.get(url, cookies=weibo.cookie).content
+            selector = etree.HTML(html)
+            info = selector.xpath("//div[@class='c']")
+            if len(info) > 1:
+                user = info[1].xpath("//div[@class='c']//a")
+                user = user[1].xpath('string(.)').encode('utf-8', 'ignore')
+                self.top_comments_user.append(user)
+                top_comments = info[1].xpath("//span[@class='ctt']")
+                top_comments = top_comments[0].xpath('string(.)').encode('utf-8', 'ignore')
+                self.top_comments.append(top_comments)
+
+                zan = info[1].xpath("//span[@class='cc']//a")
+                zan = zan[0].xpath('string(.)').encode('utf-8', 'ignore')
+                self.top_comments_zan.append(zan)
+
+                # user_status = info[1].xpath("//img/@alt")
+                # print(user_status[1])
+                # comments = info[1].xpath('string(.)').encode('utf-8', 'ignore')
+                # print(word)
+                # print(comments)
+            else:
+                self.top_comments_user.append("æ²¡æœ‰çƒ­é—¨è¯„è®ºç”¨æˆ·")
+                self.top_comments.append("æ²¡æœ‰çƒ­é—¨è¯„è®º")
+                self.top_comments_zan.append("æ²¡æœ‰çƒ­é—¨è¯„è®ºç‚¹èµæ•°")
+            # Random timer to counter anti-crawler
+            wait_time = randint(2,7)
+            print 'å·²æŒ–äº†' + str(len(self.top_comments)) + 'æ¡å¾®åš,æ­‡æ¯' + str(wait_time) + 'ç§’ã€‚'
+            time.sleep(wait_time)
+
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+    # è·å–ç”¨æˆ·å¾®åšå†…å®¹åŠå¯¹åº”çš„ç‚¹èµæ•°ã€è½¬å‘æ•°ã€è¯„è®ºæ•°
+    def getWeiboInfo(self):
+        try:
+            # 1åªèƒ½è¯»å–éƒ¨åˆ†åŸåˆ›å¾®åšï¼Œå¹¶éæ‰€æœ‰å¾®åšï¼Œåé¢ä¼šæœ‰è¿‡æ»¤å¤„ç†ã€‚
+            # url = 'http://weibo.cn/u/%d?filter=%d&page=1' % (self.user_id, self.filter)
+            url = 'http://weibo.cn/u/%d?filter=%d&page=1' % (self.user_id, 0)
+            html = requests.get(url, cookies=weibo.cookie).content
+            selector = etree.HTML(html)
+            if selector.xpath('//input[@name="mp"]') == []:
+                pageNum = 1
+            else:
+                pageNum = (int)(selector.xpath('//input[@name="mp"]')[0].attrib['value'])
+
+            if (self.page_lower == self.page_upper and self.page_lower == 0):
+                pages = range(1, pageNum + 1)
+            else:
+                pages = range(self.page_lower, self.page_upper + 1)
+
+            pattern = r"\d+\.?\d*"
+            for page in pages:
+                print 'å·²æŒ–äº†åˆ°äº†ç¬¬' + str(page) + 'é¡µå¾®åšã€‚'
+                url2 = 'http://weibo.cn/u/%d?filter=%d&page=%d' % (self.user_id, 0, page)
+                print(url2)
+                html2 = requests.get(url2, cookies=weibo.cookie).content
+                selector2 = etree.HTML(html2)
+                info = selector2.xpath("//div[@class='c']")
+                weibo_id = selector2.xpath("//div[@class='c']/@id")
+
+                # print len(info)
+                if len(info) > 3:
+                    for i in range(0, len(info) - 2):
+                        # å¾®åšè½¬å‘headerï¼ŒæŸ¥çœ‹æ˜¯å¦ä¸ºåŸåˆ›å¾®åš
+                        str_t = info[i].xpath("div/span[@class='cmt']")
+                        if (len(str_t) == 0 or (not self.filter)):
+                            self.weiboNum2 = self.weiboNum2 + 1
+                            # å¾®åšå†…å®¹
+                            str_t = info[i].xpath("div/span[@class='ctt']")
+                            weibos = str_t[0].xpath('string(.)').encode('utf-8', 'ignore')
+                            self.weibos.append(weibos)
+                            # print 'å¾®åšå†…å®¹ï¼š'+ weibos
+                            # ç‚¹èµæ•°
+                            str_zan = info[i].xpath("div/a/text()")[-4]
+                            guid = re.findall(pattern, str_zan, re.M)
+                            num_zan = int(guid[0])
+                            self.num_zan.append(num_zan)
+                            # print 'ç‚¹èµæ•°: ' + str(num_zan)
+                            # è½¬å‘æ•°
+                            forwarding = info[i].xpath("div/a/text()")[-3]
+                            guid = re.findall(pattern, forwarding, re.M)
+                            num_forwarding = int(guid[0])
+                            self.num_forwarding.append(num_forwarding)
+                            # print 'è½¬å‘æ•°: ' + str(num_forwarding)
+                            # è¯„è®ºæ•°
+                            comment = info[i].xpath("div/a/text()")[-2]
+                            guid = re.findall(pattern, comment, re.M)
+                            num_comment = int(guid[0])
+                            self.num_comment.append(num_comment)
+                            # print 'è¯„è®ºæ•°: ' + str(num_comment)
+                            if (num_comment > 0):
+                                # ä¸€å¼€å§‹çš„ä¸¤ä½å­—æ¯ä¸ºM_ï¼Œéœ€è¦å»æ‰ã€‚
+                                self.getTopWeiboComment(weibo_id[i][2:])
+
+            if self.filter == 0:
+                print 'å…±' + str(self.weiboNum2) + 'æ¡å¾®åš'
+            else:
+                print 'å…±' + str(self.weiboNum) + 'æ¡å¾®åšï¼Œå…¶ä¸­' + str(self.weiboNum2) + 'æ¡ä¸ºåŸåˆ›å¾®åš'
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+    # ä¸»ç¨‹åº
+    def start(self):
+        try:
+            weibo.getUserName(self)
+            weibo.getUserInfo(self)
+            weibo.getWeiboInfo(self)
+            print 'ä¿¡æ¯æŠ“å–å®Œæ¯•'
+            print '==========================================================================='
+        except Exception, e:
+            print "Error: ", e
+
+    # å°†çˆ¬å–çš„ä¿¡æ¯å†™å…¥æ–‡ä»¶
+    def writeTxt(self):
+        try:
+            if self.filter == 1:
+                resultHeader = '\n\nåŸåˆ›å¾®åšå†…å®¹ï¼š\n'
+            else:
+                resultHeader = '\n\nå¾®åšå†…å®¹ï¼š\n'
+            result = 'ç”¨æˆ·ä¿¡æ¯\nç”¨æˆ·æ˜µç§°ï¼š' + self.userName + '\nç”¨æˆ·idï¼š' + str(self.user_id) + '\nå¾®åšæ•°ï¼š' + str(
+                self.weiboNum) + '\nå…³æ³¨æ•°ï¼š' + str(self.following) + '\nç²‰ä¸æ•°ï¼š' + str(self.followers) + resultHeader
+            for i in range(1, self.weiboNum2 + 1):
+                text = str(i) + ':' + self.weibos[i - 1] + '\n' + 'ç‚¹èµæ•°ï¼š' + str(self.num_zan[i - 1]) + '	 è½¬å‘æ•°ï¼š' + str(
+                    self.num_forwarding[i - 1]) + '	 è¯„è®ºæ•°ï¼š' + str(self.num_comment[i - 1]) + '\n' + 'æœ€é«˜ç‚¹èµè¯„è®ºæœ‰:' + \
+                       self.top_comments_zan[i - 1] + ' æ¥è‡ªç”¨æˆ·ï¼š' + self.top_comments_user[i - 1] + ' è¯„è®ºå†…å®¹ï¼š' + \
+                       self.top_comments[i - 1] + '\n\n'
+
+                result = result + text
+            if os.path.isdir('weibo') == False:
+                os.mkdir('weibo')
+            f = open("weibo/%s_%d_%d.txt" %(self.user_id,self.page_lower,self.page_upper), "wb")
+            f.write(result)
+            f.close()
+            file_path = os.getcwd() + "\weibo" + "\%d" % self.user_id + ".txt"
+            print 'å¾®åšå†™å…¥æ–‡ä»¶å®Œæ¯•ï¼Œä¿å­˜è·¯å¾„%s' % (file_path)
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+            # å°†çˆ¬å–çš„ä¿¡æ¯å†™å…¥csvæ–‡ä»¶
+
+    def writeCSV(self):
+        try:
+            rows = zip(self.weibos, self.num_zan, self.num_forwarding, self.num_comment, self.top_comments_zan,self.top_comments_user,self.top_comments)
+            w = csv.writer(open("weibo/%s_%d_%d.csv" %(self.user_id,self.page_lower,self.page_upper), 'wb'))
+            for row in rows:
+                w.writerow(row)
+            del w
+        except Exception, e:
+            print "Error: ", e
+            traceback.print_exc()
+
+
+# ä½¿ç”¨å®ä¾‹,è¾“å…¥ä¸€ä¸ªç”¨æˆ·idï¼Œæ‰€æœ‰ä¿¡æ¯éƒ½ä¼šå­˜å‚¨åœ¨wbå®ä¾‹ä¸­
+user_id = 2803301701  # å¯ä»¥æ”¹æˆä»»æ„åˆæ³•çš„ç”¨æˆ·idï¼ˆçˆ¬è™«çš„å¾®åšidé™¤å¤–ï¼‰
+filter = 1  # å€¼ä¸º0è¡¨ç¤ºçˆ¬å–å…¨éƒ¨çš„å¾®åšä¿¡æ¯ï¼ˆåŸåˆ›å¾®åš+è½¬å‘å¾®åšï¼‰ï¼Œå€¼ä¸º1è¡¨ç¤ºåªçˆ¬å–åŸåˆ›å¾®åš
+#wb = weibo(user_id, filter, 1, 2)  # è°ƒç”¨weiboç±»ï¼Œåˆ›å»ºå¾®åšå®ä¾‹wb
+#wb = weibo(user_id, filter,205,1564)  # è°ƒç”¨weiboç±»ï¼Œåˆ›å»ºå¾®åšå®ä¾‹wb
+wb = weibo(user_id, filter,1552,1570)  # è°ƒç”¨weiboç±»ï¼Œåˆ›å»ºå¾®åšå®ä¾‹wb
+wb.start()  # çˆ¬å–å¾®åšä¿¡æ¯
+print 'ç”¨æˆ·åï¼š' + wb.userName
+print 'å…¨éƒ¨å¾®åšæ•°ï¼š' + str(wb.weiboNum)
+print 'å…³æ³¨æ•°ï¼š' + str(wb.following)
+print 'ç²‰ä¸æ•°ï¼š' + str(wb.followers)
+print 'æœ€æ–°ä¸€æ¡å¾®åšä¸ºï¼š' + wb.weibos[0]  # è‹¥filter=1åˆ™ä¸ºæœ€æ–°çš„åŸåˆ›å¾®åšï¼Œå¦‚æœè¯¥ç”¨æˆ·å¾®åšæ•°ä¸º0ï¼Œå³len(wb.weibos)==0,æ‰“å°ä¼šå‡ºé”™ï¼Œä¸‹åŒ
+print 'æœ€æ–°ä¸€æ¡å¾®åšè·å¾—çš„ç‚¹èµæ•°ï¼š' + str(wb.num_zan[0])
+print 'æœ€æ–°ä¸€æ¡å¾®åšè·å¾—çš„è½¬å‘æ•°ï¼š' + str(wb.num_forwarding[0])
+print 'æœ€æ–°ä¸€æ¡å¾®åšè·å¾—çš„è¯„è®ºæ•°ï¼š' + str(wb.num_comment[0])
+# wb.writeTxt()  # wb.writeTxt()åªæ˜¯æŠŠä¿¡æ¯å†™åˆ°æ–‡ä»¶é‡Œï¼Œå¤§å®¶å¯ä»¥æ ¹æ®è‡ªå·±çš„éœ€è¦é‡æ–°ç¼–å†™writeTxt()å‡½æ•°
+wb.writeCSV()
